@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>지구-금성 내측 호만 전이 궤도 시뮬레이터</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700&display=swap');
+    body {
+      font-family: 'Pretendard', sans-serif;
+      background-color: #0b0f19;
+      color: #f3f4f6;
+    }
+    canvas {
+      background-color: #05070c;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between p-4 md:p-6">
+
+  <!-- 헤더 영역 -->
+  <header class="max-w-7xl w-full mx-auto mb-4 flex flex-col md:flex-row md:items-center justify-between border-b border-gray-800 pb-4">
+    <div>
+      <h1 class="text-2xl md:text-3xl font-bold text-amber-400">지구 ➔ 금성 내측 호만 전이 궤도</h1>
+      <p class="text-xs md:text-sm text-gray-400 mt-1">
+        바깥쪽 지구(1.0 AU) 위치에서 정확히 출발하여 안쪽 금성(0.723 AU) 궤도로 파고드는 물리학 탐구 시뮬레이션
+      </p>
+    </div>
+  </header>
+
+  <!-- 메인 레이아웃 -->
+  <main class="max-w-7xl w-full mx-auto grid grid-cols-1 lg:grid-cols-4 gap-6 my-auto">
+    
+    <!-- 캔버스 영역 (3 컬럼) -->
+    <div class="lg:col-span-3 bg-gray-900 border border-gray-800 rounded-2xl p-4 shadow-2xl flex flex-col">
+      <div class="relative w-full aspect-[16/10] sm:aspect-[16/9] rounded-xl overflow-hidden">
+        <canvas id="simCanvas" class="w-full h-full block"></canvas>
+        
+        <!-- 상태 표시 배지 -->
+        <div id="statusBadge" class="absolute top-4 left-4 bg-gray-950/80 backdrop-blur border border-gray-700 px-3.5 py-1.5 rounded-lg text-xs font-medium text-gray-200">
+          상태: <span id="statusText" class="text-blue-400 font-bold">지구 원궤도 운항 중</span>
+        </div>
+      </div>
+
+      <!-- 물리 수치 데이터 패널 -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 text-xs">
+        <div class="bg-gray-950/60 p-2.5 rounded-lg border border-gray-800">
+          <div class="text-gray-400">지구 궤도 속도 ($v_1$)</div>
+          <div class="text-sm font-bold text-blue-400">29.78 km/s</div>
+        </div>
+        <div class="bg-gray-950/60 p-2.5 rounded-lg border border-gray-800">
+          <div class="text-gray-400">금성 궤도 속도 ($v_2$)</div>
+          <div class="text-sm font-bold text-amber-400">35.02 km/s</div>
+        </div>
+        <div class="bg-gray-950/60 p-2.5 rounded-lg border border-gray-800">
+          <div class="text-gray-400">제1 감속 ($\Delta v_1$)</div>
+          <div class="text-sm font-bold text-orange-400">2.48 km/s (역추진)</div>
+        </div>
+        <div class="bg-gray-950/60 p-2.5 rounded-lg border border-gray-800">
+          <div class="text-gray-400">제2 감속 ($\Delta v_2$)</div>
+          <div class="text-sm font-bold text-emerald-400">2.71 km/s (포획 감속)</div>
+        </div>
+        <div class="bg-gray-950/60 p-2.5 rounded-lg border border-cyan-900/70">
+          <div class="text-gray-400">우주선 속도 (태양 기준)</div>
+          <div id="shipVelocityKm" class="text-sm font-bold text-cyan-300">— km/s</div>
+          <div id="shipVelocityState" class="mt-0.5 text-[10px] text-gray-500">출발 대기</div>
+        </div>
+      </div>
+      <p class="mt-2 text-[10px] text-gray-500">속도는 전이 타원의 비바-비사 식으로 계산하며, km/s 값은 지구 궤도 속도 29.78 km/s 기준 환산입니다.</p>
+
+      <!-- 비리얼 정리 설명 패널 -->
+      <section class="mt-4 rounded-xl border border-indigo-900/70 bg-indigo-950/30 p-4 text-xs">
+        <div class="mb-2 font-bold text-indigo-200">비리얼 정리 · 호만 전이 타원의 궤도 평균</div>
+        <p class="mb-3 text-gray-400">타원 궤도 한 주기 평균, 단위 질량당 에너지입니다. 위치에너지는 음수이며, 시뮬레이터의 GM·거리 단위로 표시합니다.</p>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div class="rounded-lg border border-gray-800 bg-gray-950/70 p-2">
+            <div class="text-gray-400">평균 운동에너지 ⟨K⟩</div>
+            <div id="virialK" class="mt-1 font-bold text-sky-300">계산 중</div>
+            <div class="text-[10px] text-gray-500">GM / 2a</div>
+          </div>
+          <div class="rounded-lg border border-gray-800 bg-gray-950/70 p-2">
+            <div class="text-gray-400">평균 위치에너지 ⟨U⟩</div>
+            <div id="virialU" class="mt-1 font-bold text-amber-300">계산 중</div>
+            <div class="text-[10px] text-gray-500">−GM / a</div>
+          </div>
+          <div class="rounded-lg border border-gray-800 bg-gray-950/70 p-2">
+            <div class="text-gray-400">평균 총에너지 ⟨E⟩</div>
+            <div id="virialE" class="mt-1 font-bold text-white">계산 중</div>
+            <div class="text-[10px] text-gray-500">⟨K⟩ + ⟨U⟩</div>
+          </div>
+          <div class="rounded-lg border border-gray-800 bg-gray-950/70 p-2">
+            <div class="text-gray-400">비리얼 관계</div>
+            <div id="virialCheck" class="mt-1 font-bold text-emerald-300">계산 중</div>
+            <div class="text-[10px] text-gray-500">2⟨K⟩ + ⟨U⟩ = 0</div>
+          </div>
+        </div>
+        <p class="mt-3 text-gray-400">중력에 묶인 케플러 궤도에서는 <span class="font-semibold text-gray-200">2⟨K⟩ = −⟨U⟩</span>이고, 평균 총에너지는 음수입니다. 이 관계는 순간값이 아니라 궤도 전체 시간 평균에 성립합니다.</p>
+      </section>
+    </div>
+
+    <!-- 제어 패널 (1 컬럼) -->
+    <div class="lg:col-span-1 flex flex-col gap-4">
+      <div class="bg-gray-900 border border-gray-800 rounded-2xl p-5 shadow-xl flex-1 flex flex-col justify-between">
+        <div>
+          <h2 class="text-lg font-bold text-gray-100 mb-4 pb-2 border-b border-gray-800 flex items-center gap-2">
+            <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+            시뮬레이션 제어
+          </h2>
+
+          <!-- 배속 조절 -->
+          <div class="mb-5">
+            <div class="flex justify-between text-xs text-gray-300 mb-1 font-semibold">
+              <label for="speedRange">시뮬레이션 배속</label>
+              <span id="speedVal" class="text-amber-400 font-bold">2.5x</span>
+            </div>
+            <input type="range" id="speedRange" min="0.5" max="5.0" step="0.5" value="2.5" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-amber-400">
+          </div>
+
+          <!-- 금성 궤도 고도 조절 -->
+          <div class="mb-5">
+            <div class="flex justify-between text-xs text-gray-300 mb-1 font-semibold">
+              <label for="altRange">금성 주행 궤도 고도</label>
+              <span id="altVal" class="text-amber-400 font-bold">500 km</span>
+            </div>
+            <input type="range" id="altRange" min="300" max="1500" step="100" value="500" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-amber-400">
+          </div>
+
+          <!-- 주요 실행 버튼 -->
+          <div class="flex flex-col gap-2.5 mb-4">
+            <button id="btnTransfer" class="w-full py-3 px-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-gray-950 font-bold rounded-xl shadow-lg transition-all transform active:scale-95 flex items-center justify-center gap-2">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+              금성 전이 개시 (&Delta;v₁ 감속)
+            </button>
+            <button id="btnReset" class="w-full py-2.5 px-4 bg-gray-800 hover:bg-gray-700 text-gray-300 font-semibold rounded-xl border border-gray-700 transition-all flex items-center justify-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+              처음으로 리셋
+            </button>
+          </div>
+        </div>
+
+        <!-- 핵심 원리 요약 -->
+        <div class="bg-gray-950/80 p-3.5 rounded-xl border border-gray-800 text-xs text-gray-400 space-y-1.5">
+          <div class="font-semibold text-gray-200 border-b border-gray-800 pb-1 mb-1">💡 출발 위치 동기화 안내</div>
+          <p>• 우주선은 지구 궤도(바깥 원, 1.0 AU) 상의 지구 위치에서 정확히 출발합니다.</p>
+          <p>• 역추진 감속 후 점차 안쪽 금성 궤도(안쪽 원, 0.723 AU)로 파고듭니다.</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 푸터 -->
+  <footer class="max-w-7xl w-full mx-auto text-center text-xs text-gray-500 py-3 border-t border-gray-800">
+    고등학교 지구과학 II / 물리학 II 궤도 운동 탐구 시뮬레이터
+  </footer>
+
+  <script>
+    // Canvas 및 Context 설정
+    const canvas = document.getElementById('simCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // UI 요소 참조
+    const speedRange = document.getElementById('speedRange');
+    const speedVal = document.getElementById('speedVal');
+    const altRange = document.getElementById('altRange');
+    const altVal = document.getElementById('altVal');
+    const btnTransfer = document.getElementById('btnTransfer');
+    const btnReset = document.getElementById('btnReset');
+    const statusText = document.getElementById('statusText');
+
+    // 궤도 물리 상수 (픽셀 비율 스케일)
+    const GM = 18000;
+    const r1 = 210;               // 지구 궤도 반지름 (1.0 AU - 바깥 원)
+    const r2 = 210 * 0.723;       // 금성 궤도 반지름 (0.723 AU - 안쪽 원, 약 151.8px)
+    const a_trans = (r1 + r2) / 2; // 내측 전이 타원 장반경
+    const TRANSFER_E = (r1 - r2) / (r1 + r2); // 전이 타원의 이심률
+    const TRANSFER_TIME = Math.PI * Math.sqrt(Math.pow(a_trans, 3) / GM); // 호만 전이 반주기
+
+    // 전이 타원 한 주기 평균 에너지(단위 질량당): <K>=GM/(2a), <U>=-GM/a
+    const virialK = GM / (2 * a_trans);
+    const virialU = -GM / a_trans;
+    const virialE = virialK + virialU;
+    document.getElementById('virialK').textContent = virialK.toFixed(2);
+    document.getElementById('virialU').textContent = virialU.toFixed(2);
+    document.getElementById('virialE').textContent = virialE.toFixed(2);
+    document.getElementById('virialCheck').textContent = (2 * virialK + virialU).toFixed(2) + ' ≈ 0';
+
+    // 케플러 공전 속도
+    const v1 = Math.sqrt(GM / r1);
+    const v2 = Math.sqrt(GM / r2);
+    const KM_S_PER_SIM_SPEED = 29.78 / v1;
+    const shipVelocityKmEl = document.getElementById('shipVelocityKm');
+    const shipVelocityStateEl = document.getElementById('shipVelocityState');
+
+    function setShipVelocity(speedSim, state) {
+      shipVelocityKmEl.textContent = `${(speedSim * KM_S_PER_SIM_SPEED).toFixed(2)} km/s`;
+      shipVelocityStateEl.textContent = state;
+    }
+
+    function clearShipVelocity(state) {
+      shipVelocityKmEl.textContent = '— km/s';
+      shipVelocityStateEl.textContent = state;
+    }
+
+    function getTransferSpeed(progress) {
+      const position = getTransferPosition(progress);
+      const radius = Math.hypot(position.x, position.y);
+      // 비바-비사 식: v² = GM(2/r - 1/a)
+      return Math.sqrt(Math.max(0, GM * (2 / radius - 1 / a_trans)));
+    }
+
+    // 시뮬레이션 상태 변수
+    let simSpeed = parseFloat(speedRange.value);
+    let venusOrbitAlt = parseInt(altRange.value);
+
+    let earthAngle = 0;           // 지구 현재 각도
+    let venusAngle = Math.PI;     // 금성 현재 각도 (지구 반대편 출발)
+    let startEarthAngle = 0;      // 우주선 전이 출발 시 지구 위치 각도
+    let shipCaptureAngle = 0;     // 금성 위성 궤도 회전 각도
+
+    let phase = 'EARTH_ORBIT';    // 'EARTH_ORBIT', 'WAITING_FOR_WINDOW', 'TRANSFERRING', 'VENUS_BRAKING', 'VENUS_CAPTURE', 'VENUS_ORBIT'
+    let transferProgress = 0;     // 전이 진행도 [0, 1]
+    let transferElapsed = 0;      // 전이 경과 시뮬레이션 시간
+    let launchWaitRemaining = 0;  // 자연스러운 발사 창까지 남은 시뮬레이션 시간
+    let brakingProgress = 0;      // 금성 도착 후 포획 감속 진행도 [0, 1]
+    const BRAKING_DURATION = 1.0; // 감속 연출 시간 (시뮬레이션 단위)
+    let captureProgress = 0;      // 금성 포획 궤도에 부드럽게 진입하는 진행도 [0, 1]
+    let particles = [];           // 엔진 연소 파티클 배열
+
+    // 케플러 방정식 M = E - e sin(E)를 풀어 고정된 호만 타원 위 위치를 계산함.
+    function getTransferPosition(progress) {
+      const q = Math.max(0, Math.min(1, progress));
+      const meanAnomaly = Math.PI * q;
+      let eccentricAnomaly = meanAnomaly;
+      for (let i = 0; i < 8; i++) {
+        const f = eccentricAnomaly - TRANSFER_E * Math.sin(eccentricAnomaly) - meanAnomaly;
+        const fp = 1 - TRANSFER_E * Math.cos(eccentricAnomaly);
+        eccentricAnomaly -= f / fp;
+      }
+
+      const cOffset = (r1 - r2) / 2;
+      const bTrans = Math.sqrt(r1 * r2);
+      const x = cOffset + a_trans * Math.cos(eccentricAnomaly);
+      const y = bTrans * Math.sin(eccentricAnomaly);
+      return {
+        x: x * Math.cos(startEarthAngle) - y * Math.sin(startEarthAngle),
+        y: x * Math.sin(startEarthAngle) + y * Math.cos(startEarthAngle)
+      };
+    }
+
+    // 캔버스 반응형 크기 설정
+    function resizeCanvas() {
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // 슬라이더 이벤트 처리
+    speedRange.addEventListener('input', (e) => {
+      simSpeed = parseFloat(e.target.value);
+      speedVal.textContent = simSpeed.toFixed(1) + 'x';
+    });
+
+    altRange.addEventListener('input', (e) => {
+      venusOrbitAlt = parseInt(e.target.value);
+      altVal.textContent = venusOrbitAlt + ' km';
+    });
+
+    // 버튼 이벤트 처리
+    btnTransfer.addEventListener('click', () => {
+      if (phase === 'EARTH_ORBIT') {
+        // 금성의 위치를 강제로 바꾸지 않고, 실제 행성 공전으로 발사 창을 기다림
+        phase = 'WAITING_FOR_WINDOW';
+        transferProgress = 0;
+        transferElapsed = 0;
+        const omega1 = v1 / r1;
+        const omega2 = v2 / r2;
+        const fullTurn = Math.PI * 2;
+        const requiredPhase = (earthAngle + Math.PI) - (venusAngle + omega2 * TRANSFER_TIME);
+        const positivePhase = ((requiredPhase % fullTurn) + fullTurn) % fullTurn;
+        launchWaitRemaining = positivePhase / (omega2 - omega1);
+        clearShipVelocity('발사 창 대기');
+        statusText.textContent = "발사 창 동기화 중 — 우주선은 지구와 함께 대기";
+        statusText.className = "text-blue-300 font-bold";
+      }
+    });
+
+    btnReset.addEventListener('click', () => {
+      phase = 'EARTH_ORBIT';
+      earthAngle = 0;
+      venusAngle = Math.PI;
+      startEarthAngle = 0;
+      shipCaptureAngle = 0;
+      transferProgress = 0;
+      transferElapsed = 0;
+      launchWaitRemaining = 0;
+      brakingProgress = 0;
+      captureProgress = 0;
+      particles = [];
+      clearShipVelocity('출발 대기');
+      statusText.textContent = "지구 원궤도 운항 중";
+      statusText.className = "text-blue-400 font-bold";
+    });
+
+    // 감속 파티클 연출 함수
+    function spawnThrusterParticles(x, y, angle, isRetrograde) {
+      const burnAngle = isRetrograde ? angle + Math.PI / 2 : angle - Math.PI / 2;
+      for (let i = 0; i < 30; i++) {
+        const pSpeed = (Math.random() * 2.5 + 1) * simSpeed;
+        const spread = (Math.random() - 0.5) * 0.4;
+        particles.push({
+          x: x,
+          y: y,
+          vx: Math.cos(burnAngle + spread) * pSpeed,
+          vy: Math.sin(burnAngle + spread) * pSpeed,
+          life: 1.0,
+          color: Math.random() > 0.3 ? '#f97316' : '#ef4444'
+        });
+      }
+    }
+
+    // 물리 파라미터 업데이트 연산 Loop
+    function update() {
+      const omega1 = v1 / r1;
+      const omega2 = v2 / r2;
+      let dt = 0.015 * simSpeed;
+
+      // 발사 창 대기 중에도 행성은 평소와 같은 배속으로 공전
+      if (phase === 'WAITING_FOR_WINDOW') {
+        dt = Math.min(dt, Math.max(0, launchWaitRemaining));
+      } else if (phase === 'TRANSFERRING') {
+        // 마지막 프레임을 정확한 도착 시각에 맞춰 금성과 고정 궤도 끝점을 동기화
+        const remainingTime = TRANSFER_TIME - transferElapsed;
+        dt = Math.min(dt, Math.max(0, remainingTime));
+      }
+
+      // 1. 지구 공전 (바깥 원)
+      earthAngle += omega1 * dt;
+
+      // 2. 금성 공전 (안쪽 원)
+      venusAngle += omega2 * dt;
+
+      // 3. 우주선 상태별 이동 계산
+      if (phase === 'EARTH_ORBIT') {
+        // 전이 전에는 바깥쪽 지구 위치와 완전히 동일하게 이동
+      } else if (phase === 'WAITING_FOR_WINDOW') {
+        launchWaitRemaining = Math.max(0, launchWaitRemaining - dt);
+        if (launchWaitRemaining <= 1e-10) {
+          // 금성이 자연 공전해 도착 위상에 왔으므로 현재 지구 위치에서 출발
+          startEarthAngle = earthAngle;
+          transferProgress = 0;
+          transferElapsed = 0;
+          phase = 'TRANSFERRING';
+          setShipVelocity(getTransferSpeed(0), '지구 출발 속도');
+          statusText.textContent = "발사 창 도달 — 지구에서 금성으로 전이 중";
+          statusText.className = "text-orange-400 font-bold";
+          const ex = r1 * Math.cos(earthAngle);
+          const ey = r1 * Math.sin(earthAngle);
+          spawnThrusterParticles(ex, ey, earthAngle, true);
+        }
+      } else if (phase === 'TRANSFERRING') {
+        // 실제 호만 전이 반주기 동안 케플러 타원 궤도를 따라 이동
+        transferElapsed += dt;
+        transferProgress = Math.min(1, transferElapsed / TRANSFER_TIME);
+
+        if (transferElapsed >= TRANSFER_TIME - 1e-10) {
+          transferElapsed = TRANSFER_TIME;
+          transferProgress = 1;
+          // 도착 프레임에는 우주선이 금성과 같은 위치에 있도록 캡처 단계를 시작
+          phase = 'VENUS_BRAKING';
+          setShipVelocity(getTransferSpeed(1), '금성 도착 속도 — 포획 감속 시작');
+          brakingProgress = 0;
+          captureProgress = 0;
+          shipCaptureAngle = 0;
+          statusText.textContent = "금성 도착 — 포획 감속 중";
+          statusText.className = "text-orange-300 font-bold";
+
+          // 금성 위치 도착 시 제2 감속 연출
+          const vx = r2 * Math.cos(venusAngle);
+          const vy = r2 * Math.sin(venusAngle);
+          spawnThrusterParticles(vx, vy, venusAngle, true);
+        }
+      } else if (phase === 'VENUS_BRAKING') {
+        // 전이 도착 속도에서 금성 공전 속도까지 감속한 뒤 포획 궤도 진입
+        brakingProgress = Math.min(1, brakingProgress + dt / BRAKING_DURATION);
+        if (brakingProgress >= 1) {
+          phase = 'VENUS_CAPTURE';
+          captureProgress = 0;
+          shipCaptureAngle = 0;
+          setShipVelocity(v2, '감속 완료 — 금성 공전 속도 기준');
+          statusText.textContent = "감속 완료 — 금성 포획 궤도에 부드럽게 진입 중";
+          statusText.className = "text-orange-300 font-bold";
+        }
+      } else if (phase === 'VENUS_CAPTURE') {
+        // 고정 전이 경로 끝점에서 금성과 포개진 뒤, 약 2.2 시뮬레이션 시간에 걸쳐 포획 궤도로 진입
+        captureProgress = Math.min(1, captureProgress + dt * 0.45);
+        shipCaptureAngle += 2.5 * dt;
+        if (captureProgress >= 1) {
+          phase = 'VENUS_ORBIT';
+          statusText.textContent = "금성 포획 성공 (안정 위성 궤도 진입)";
+          statusText.className = "text-emerald-400 font-bold";
+        }
+      } else if (phase === 'VENUS_ORBIT') {
+        // 금성 중심 기준 위성 공전
+        shipCaptureAngle += 2.5 * dt;
+      }
+
+      // 파티클 좌표 및 수명 업데이트
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= 0.04;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+    }
+
+    // Canvas 렌더링 Loop
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const cx = canvas.width / 2;
+      const cy = canvas.height / 2;
+
+      ctx.save();
+      ctx.translate(cx, cy);
+
+      // --- 1. 태양 (중심) ---
+      ctx.beginPath();
+      ctx.arc(0, 0, 18, 0, Math.PI * 2);
+      ctx.fillStyle = '#f59e0b';
+      ctx.shadowColor = '#fbbf24';
+      ctx.shadowBlur = 25;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // --- 2. 원궤도 가이드 (지구: 바깥쪽 원, 금성: 안쪽 원) ---
+      // 지구 궤도 (1.0 AU - 바깥 원)
+      ctx.beginPath();
+      ctx.arc(0, 0, r1, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(59, 130, 246, 0.4)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 5]);
+      ctx.stroke();
+
+      // 금성 궤도 (0.723 AU - 안쪽 원)
+      ctx.beginPath();
+      ctx.arc(0, 0, r2, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(245, 158, 11, 0.4)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 5]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // --- 3. 완전한 전이 타원 가이드라인 ---
+      if (phase === 'TRANSFERRING' || phase === 'VENUS_BRAKING' || phase === 'VENUS_CAPTURE') {
+        // 전이 중 및 도착 직후 포획 동안 전체 타원을 유지해 금성과 도착 끝점의 겹침을 확인
+        ctx.save();
+        ctx.rotate(startEarthAngle);
+        const cOffset = (r1 - r2) / 2;
+        const bTrans = Math.sqrt(r1 * r2);
+        ctx.beginPath();
+        ctx.ellipse(cOffset, 0, a_trans, bTrans, 0, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(249, 115, 22, 0.75)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // --- 4. 행성 위치 연산 및 그리기 ---
+      // 지구 (바깥 원 상의 점)
+      const ex = r1 * Math.cos(earthAngle);
+      const ey = r1 * Math.sin(earthAngle);
+      ctx.beginPath();
+      ctx.arc(ex, ey, 9, 0, Math.PI * 2);
+      ctx.fillStyle = '#3b82f6';
+      ctx.fill();
+      ctx.strokeStyle = '#93c5fd';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.fillStyle = '#93c5fd';
+      ctx.font = '11px Pretendard';
+      ctx.fillText('지구 (1.0 AU)', ex + 12, ey + 4);
+
+      // 금성 (안쪽 원 상의 점)
+      const vx = r2 * Math.cos(venusAngle);
+      const vy = r2 * Math.sin(venusAngle);
+      ctx.beginPath();
+      ctx.arc(vx, vy, 8, 0, Math.PI * 2);
+      ctx.fillStyle = '#f59e0b';
+      ctx.fill();
+      ctx.strokeStyle = '#fde047';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.fillStyle = '#fde047';
+      ctx.font = '11px Pretendard';
+      ctx.fillText('금성 (0.723 AU)', vx + 12, vy + 4);
+
+      // --- 5. 우주선 위치 좌표 연산 및 그리기 ---
+      let sx, sy;
+      if (phase === 'EARTH_ORBIT' || phase === 'WAITING_FOR_WINDOW') {
+        // 지구 궤도 운항·발사 창 대기 중에는 지구 위치(ex, ey)에 우주선이 위치함
+        sx = ex;
+        sy = ey;
+      } else if (phase === 'TRANSFERRING') {
+        // 주황색 가이드와 동일한 계산으로 현재 금성 위치까지 부드럽게 합류
+        const shipPosition = getTransferPosition(transferProgress);
+        setShipVelocity(getTransferSpeed(transferProgress), '전이 비행 중');
+        sx = shipPosition.x;
+        sy = shipPosition.y;
+      } else if (phase === 'VENUS_BRAKING' || phase === 'VENUS_CAPTURE' || phase === 'VENUS_ORBIT') {
+        const targetOrbRadius = 15 + (venusOrbitAlt / 1500) * 12;
+        if (phase === 'VENUS_BRAKING') {
+          const t = Math.max(0, Math.min(1, brakingProgress));
+          const easedBrake = t * t * (3 - 2 * t);
+          const arrivalSpeed = getTransferSpeed(1);
+          const capturedSpeed = v2;
+          setShipVelocity(arrivalSpeed + (capturedSpeed - arrivalSpeed) * easedBrake, '금성 도착 후 포획 감속 중');
+        }
+        const t = phase === 'VENUS_ORBIT' ? 1 : (phase === 'VENUS_CAPTURE' ? captureProgress : 0);
+        const easedCapture = t * t * (3 - 2 * t);
+        const orbRadius = targetOrbRadius * easedCapture;
+        sx = vx + orbRadius * Math.cos(shipCaptureAngle);
+        sy = vy + orbRadius * Math.sin(shipCaptureAngle);
+
+        // 포획 중인 궤도 링도 우주선과 같은 속도로 확장
+        if (orbRadius > 0.5) {
+          ctx.beginPath();
+          ctx.arc(vx, vy, orbRadius, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(16, 185, 129, 0.6)';
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+        }
+      }
+
+      // 파티클 렌더링
+      particles.forEach(p => {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 2 * p.life, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.fill();
+      });
+
+      // 우주선 점 (흰색 점)
+      ctx.beginPath();
+      ctx.arc(sx, sy, 5, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = '#ef4444';
+      ctx.shadowBlur = 10;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      ctx.restore();
+
+      // --- 6. 금성 줌인 인셋 창 (Callout Inset) ---
+      if (phase === 'VENUS_CAPTURE' || phase === 'VENUS_ORBIT') {
+        drawVenusCalloutInset(vx + cx, vy + cy);
+      }
+
+      update();
+      requestAnimationFrame(draw);
+    }
+
+    // 금성 궤도 포획 줌인 인셋 창 렌더링 함수
+    function drawVenusCalloutInset(venusCanvasX, venusCanvasY) {
+      const insetWidth = 160;
+      const insetHeight = 160;
+      const insetX = canvas.width - insetWidth - 16;
+      const insetY = canvas.height - insetHeight - 16;
+
+      ctx.save();
+
+      // 연결선
+      ctx.beginPath();
+      ctx.moveTo(venusCanvasX, venusCanvasY);
+      ctx.lineTo(insetX, insetY + insetHeight / 2);
+      ctx.strokeStyle = 'rgba(16, 185, 129, 0.4)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // 창 배경
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+      ctx.strokeStyle = '#10b981';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(insetX, insetY, insetWidth, insetHeight, 12);
+      ctx.fill();
+      ctx.stroke();
+
+      // 클리핑
+      ctx.beginPath();
+      ctx.roundRect(insetX, insetY, insetWidth, insetHeight, 12);
+      ctx.clip();
+
+      const insetCx = insetX + insetWidth / 2;
+      const insetCy = insetY + insetHeight / 2;
+
+      // 인셋 금성
+      ctx.beginPath();
+      ctx.arc(insetCx, insetCy, 24, 0, Math.PI * 2);
+      ctx.fillStyle = '#f59e0b';
+      ctx.fill();
+      ctx.strokeStyle = '#fde047';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // 인셋 위성 궤도 링
+      const calloutOrbRadius = 45;
+      ctx.beginPath();
+      ctx.arc(insetCx, insetCy, calloutOrbRadius, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(16, 185, 129, 0.7)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.stroke();
+
+      // 인셋 우주선 점
+      const isx = insetCx + calloutOrbRadius * Math.cos(shipCaptureAngle);
+      const isy = insetCy + calloutOrbRadius * Math.sin(shipCaptureAngle);
+
+      ctx.beginPath();
+      ctx.arc(isx, isy, 5, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = '#10b981';
+      ctx.shadowBlur = 8;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // 라벨
+      ctx.fillStyle = '#10b981';
+      ctx.font = 'bold 11px Pretendard';
+      ctx.textAlign = 'center';
+      ctx.fillText('금성 주행 궤도 포획', insetCx, insetY + 20);
+
+      ctx.restore();
+    }
+
+    // 애니메이션 실행
+    requestAnimationFrame(draw);
+  </script>
+</body>
+</html>
